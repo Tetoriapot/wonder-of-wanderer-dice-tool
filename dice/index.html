@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="ja" data-theme="default">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta id="themeColor" name="theme-color" content="#73d0eb" />
+  <meta name="description" content="TRPG『WONDER of WANDERER』のココフォリア用チャパレ式作成と判定ログ再計算を行う非公式ファンメイドツールです。" />
+  <meta name="robots" content="index, follow" />
+  <title>WONDER of WANDERER 判定補助</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">WONDER of WANDERER</p>
+        <h1>判定補助ツール</h1>
+        <p class="lead">ココフォリア用チャパレ式の作成と、貼り付けた判定ログの成功度再計算。</p>
+      </div>
+      <div class="hero-actions">
+        <div class="theme-switcher" role="group" aria-label="表示モード">
+          <span class="theme-switcher-label" aria-hidden="true">表示</span>
+          <button type="button" data-theme-option="default" aria-pressed="true">通常</button>
+          <button type="button" data-theme-option="dark" aria-pressed="false">ダーク</button>
+          <button type="button" data-theme-option="simple" aria-pressed="false">シンプル</button>
+        </div>
+        <div class="die-mark" aria-hidden="true">◆</div>
+      </div>
+    </header>
+
+    <section class="grid">
+      <section class="panel">
+        <h2>① チャパレ式を作る</h2>
+
+        <div class="field-row">
+          <label>
+            <span>能力値</span>
+            <input id="ability" type="number" min="0" max="99" value="4" inputmode="numeric">
+          </label>
+          <label>
+            <span>追加ダイス</span>
+            <input id="bonusDice" type="number" min="-99" max="99" value="0" inputmode="numeric">
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label>
+            <span>目標値</span>
+            <input id="target" type="number" min="1" max="12" value="6" inputmode="numeric">
+          </label>
+          <label class="check-card">
+            <input id="favored" type="checkbox">
+            <span>
+              <strong>得意分野</strong>
+              <small>目標値 +1</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label>
+            <span>大成功値</span>
+            <input id="crit" type="number" min="1" max="12" value="1" inputmode="numeric">
+          </label>
+          <label>
+            <span>大失敗値</span>
+            <input id="fumble" type="number" min="1" max="12" value="12" inputmode="numeric">
+          </label>
+        </div>
+
+        <label class="wide-field">
+          <span>能力名・装備・ギフト等</span>
+          <input id="memo" type="text" placeholder="例：話術">
+        </label>
+
+        <div class="template-section">
+          <div class="template-head">
+            <div>
+              <h3>補正テンプレ</h3>
+              <p>装備・ギフト・アイテム・その他の補正を分けて入力できます。</p>
+            </div>
+          </div>
+
+          <div class="template-grid">
+            <article class="template-card">
+              <h4>装備</h4>
+              <div class="mini-grid">
+                <label>
+                  <span>ダイス</span>
+                  <input id="equipDice" type="number" value="0">
+                </label>
+                <label>
+                  <span>目標値</span>
+                  <input id="equipTarget" type="number" value="0">
+                </label>
+              </div>
+              <input id="equipMemo" class="mini-memo" type="text" placeholder="例：安全靴" aria-label="装備の名称メモ">
+            </article>
+
+            <article class="template-card">
+              <h4>ギフト</h4>
+              <div class="mini-grid">
+                <label>
+                  <span>ダイス</span>
+                  <input id="giftDice" type="number" value="0">
+                </label>
+                <label>
+                  <span>目標値</span>
+                  <input id="giftTarget" type="number" value="0">
+                </label>
+              </div>
+              <input id="giftMemo" class="mini-memo" type="text" placeholder="例：頭の体操" aria-label="ギフトの名称メモ">
+            </article>
+
+            <article class="template-card">
+              <h4>アイテム</h4>
+              <div class="mini-grid">
+                <label>
+                  <span>ダイス</span>
+                  <input id="itemDice" type="number" value="0">
+                </label>
+                <label>
+                  <span>目標値</span>
+                  <input id="itemTarget" type="number" value="0">
+                </label>
+              </div>
+              <input id="itemMemo" class="mini-memo" type="text" placeholder="例：スマッシュミント" aria-label="アイテムの名称メモ">
+            </article>
+
+            <article class="template-card">
+              <h4>その他</h4>
+              <div class="mini-grid">
+                <label>
+                  <span>ダイス</span>
+                  <input id="otherDice" type="number" value="0">
+                </label>
+                <label>
+                  <span>目標値</span>
+                  <input id="otherTarget" type="number" value="0">
+                </label>
+              </div>
+              <input id="otherMemo" class="mini-memo" type="text" placeholder="例：プレイス効果" aria-label="その他の名称メモ">
+            </article>
+          </div>
+        </div>
+
+        <div class="output-box">
+          <div class="output-head">
+            <span>ココフォリア用チャパレ式</span>
+            <button id="copyCommand" class="ghost-button" type="button">コピー</button>
+          </div>
+          <code id="commandOutput"></code>
+        </div>
+
+        <div class="button-row">
+          <button id="plusDie" class="soft-button" type="button">追加ダイス +1</button>
+          <button id="plusTarget" class="soft-button" type="button">目標値 +1</button>
+          <button id="resetBuilder" class="soft-button" type="button">リセット</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>② ココフォリア結果を再計算</h2>
+        <p class="panel-note">
+          ココフォリアの判定結果を、そのまま丸ごと貼り付けてください。
+          <code>WW12</code> の式と出目を読み取り、大成功・大失敗の相殺を反映して成功度を数え直します。
+        </p>
+
+        <textarea id="logInput" rows="4" placeholder="(7+1+4)WW12<=(6+1+1)　交戦
+(12WW12<=8) ＞ [9,8,11,5,8,2,11,3,6,1,11,12] ＞ 成功数6（大成功1個、大失敗1個）"></textarea>
+
+        <div class="analyze-actions">
+          <button id="analyzeButton" class="primary-button" type="button">成功度を数える</button>
+          <button id="clearLog" class="ghost-button" type="button">消去</button>
+        </div>
+
+        <div id="analyzeEmpty" class="analyze-empty">
+          ログを貼ると、ここに再計算結果が出ます。
+        </div>
+
+        <div id="analyzeResult" class="analyze-result hidden">
+          <div class="score-card">
+            <span>現在の成功度</span>
+            <strong id="actualDegree">0</strong>
+          </div>
+
+          <div class="metrics" id="metrics"></div>
+
+          <div class="postroll-panel">
+            <div class="postroll-head">
+              <div>
+                <h3>結果確定前の調整</h3>
+                <p>出目や判定値を変更すると、成功度を即座に再計算します。</p>
+              </div>
+              <button id="resetEdits" class="ghost-button" type="button">変更をすべて戻す</button>
+            </div>
+
+            <label class="super-success-toggle">
+              <input id="superSuccess" type="checkbox">
+              <span>
+                <strong>超成功を使用</strong>
+                <small>大成功1個につき成功度 +3</small>
+              </span>
+            </label>
+
+            <div class="threshold-editor">
+              <label>
+                <span>目標値</span>
+                <div class="stepper">
+                  <button type="button" data-threshold="target" data-delta="-1">−</button>
+                  <input id="editTarget" type="number" step="1" inputmode="numeric">
+                  <button type="button" data-threshold="target" data-delta="1">＋</button>
+                </div>
+              </label>
+              <label>
+                <span>大成功値</span>
+                <div class="stepper">
+                  <button type="button" data-threshold="crit" data-delta="-1">−</button>
+                  <input id="editCrit" type="number" step="1" inputmode="numeric">
+                  <button type="button" data-threshold="crit" data-delta="1">＋</button>
+                </div>
+              </label>
+              <label>
+                <span>大失敗値</span>
+                <div class="stepper">
+                  <button type="button" data-threshold="fumble" data-delta="-1">−</button>
+                  <input id="editFumble" type="number" step="1" inputmode="numeric">
+                  <button type="button" data-threshold="fumble" data-delta="1">＋</button>
+                </div>
+              </label>
+            </div>
+
+            <div class="gift-presets">
+              <div class="judgement-value-control">
+                <select id="judgementValueTarget" aria-label="判定値 +1 の対象">
+                  <option value="target">目標値</option>
+                  <option value="crit">大成功値</option>
+                  <option value="fumble">大失敗値</option>
+                </select>
+                <button id="presetMagician" class="soft-button" type="button">判定値 +1</button>
+              </div>
+              <button id="applyMinusOne" class="soft-button" type="button">選択した出目を−1</button>
+              <div class="direct-value-control">
+                <label for="selectedValueInput">選択した出目を変更</label>
+                <input id="selectedValueInput" type="number" min="1" max="12" value="1" inputmode="numeric">
+                <button id="setSelectedValue" class="soft-button" type="button">反映</button>
+              </div>
+            </div>
+            <div id="diceEditor" class="dice-editor"></div>
+          </div>
+
+          <div class="recalc-box compact-recalc" aria-live="polite">
+            <strong id="judge">判定</strong>
+            <span class="recalc-separator">／</span>
+            <span id="calculation"></span>
+          </div>
+
+          <div id="differenceBox" class="difference-box"></div>
+
+          <div class="output-box final-output">
+            <div class="output-head">
+              <span>確定結果メモ</span>
+              <button id="copyFinalResult" class="ghost-button" type="button">コピー</button>
+            </div>
+            <code id="finalResultText"></code>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <footer class="site-footer">
+      <p>本ツールは非公式のファンメイドツールであり、『<a href="https://ssproject.lsv.jp/wow/public/" target="_blank" rel="noopener noreferrer">WONDER of WANDERER</a>』の公式または権利者とは関係ありません。</p>
+      <p>入力した判定ログはブラウザー内だけで処理され、外部へ送信されません。</p>
+    </footer>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

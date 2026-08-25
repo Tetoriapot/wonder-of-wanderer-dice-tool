@@ -1,0 +1,16 @@
+# Operating system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Local build and test artifacts
+node_modules/
+coverage/
+_site/
+*.log
+*.tmp
