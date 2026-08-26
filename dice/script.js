@@ -12,7 +12,7 @@
     itemDice:$("itemDice"), itemTarget:$("itemTarget"), itemMemo:$("itemMemo"),
     otherDice:$("otherDice"), otherTarget:$("otherTarget"), otherMemo:$("otherMemo"),
     commandOutput:$("commandOutput"), copyCommand:$("copyCommand"),
-    plusDie:$("plusDie"), plusTarget:$("plusTarget"), resetBuilder:$("resetBuilder"),
+    resetBuilder:$("resetBuilder"),
     logInput:$("logInput"), analyzeButton:$("analyzeButton"), clearLog:$("clearLog"),
     analyzeEmpty:$("analyzeEmpty"), analyzeResult:$("analyzeResult"),
     actualDegree:$("actualDegree"), metrics:$("metrics"), diceEditor:$("diceEditor"),
@@ -20,13 +20,22 @@
     editTarget:$("editTarget"), editCrit:$("editCrit"), editFumble:$("editFumble"), superSuccess:$("superSuccess"),
     resetEdits:$("resetEdits"), presetMagician:$("presetMagician"), judgementValueTarget:$("judgementValueTarget"),
     applyMinusOne:$("applyMinusOne"), setSelectedValue:$("setSelectedValue"), selectedValueInput:$("selectedValueInput"),
+    mpChargeSummary:$("mpChargeSummary"), mpChargeDice:$("mpChargeDice"), clearMpCharge:$("clearMpCharge"),
     finalResultText:$("finalResultText"), copyFinalResult:$("copyFinalResult")
   };
 
   const THEME_STORAGE_KEY="wow-display-theme";
   const THEMES=["default","dark","simple"];
   const THEME_COLORS={default:"#73d0eb",dark:"#081626",simple:"#ececec"};
+  const LIMIT_GUMS={
+    none:{label:"",critDelta:0,fumbleDelta:0,numerator:1,denominator:1,fraction:""},
+    "60":{label:"60%リミットガム",critDelta:-1,fumbleDelta:1,numerator:2,denominator:3,fraction:"2/3"},
+    "50":{label:"50%リミットガム",critDelta:-1,fumbleDelta:1,numerator:1,denominator:2,fraction:"1/2"}
+  };
   const themeButtons=[...document.querySelectorAll("[data-theme-option]")];
+  const limitGumRadios=[...document.querySelectorAll("[data-limit-gum]")];
+
+  function getLimitGum(value){return LIMIT_GUMS[value]||LIMIT_GUMS.none}
 
   function applyTheme(requestedTheme,persist=false){
     const theme=THEMES.includes(requestedTheme)?requestedTheme:"default";
@@ -132,20 +141,29 @@
     return {diceCount,crit,fumble,target,rolls,shownSuccess:shown?parseInt(shown[1],10):null};
   }
 
-  function evaluateCurrent(){
-    const data={target:state.target,crit:state.crit,fumble:state.fumble,rolls:state.currentRolls};
+  function evaluateCurrent(mpCharged=state.mpCharged){
+    const limitGum=getLimitGum(state.limitGum);
+    const data={
+      target:state.target,
+      crit:state.crit+limitGum.critDelta,
+      fumble:state.fumble+limitGum.fumbleDelta,
+      rolls:state.currentRolls
+    };
     const dice=data.rolls.map((value,index)=>{
-      const isFumble=value>=data.fumble;
-      const isCrit=!isFumble&&value<=data.crit;
-      const isNormalSuccess=!isFumble&&!isCrit&&value<=data.target;
-      return {value,index,isFumble,isCrit,isNormalSuccess,cancelled:false};
+      const isMpCharged=mpCharged.has(index);
+      const isFumble=!isMpCharged&&value>=data.fumble;
+      const isCrit=!isMpCharged&&!isFumble&&value<=data.crit;
+      const isNormalSuccess=!isMpCharged&&!isFumble&&!isCrit&&value<=data.target;
+      return {value,index,isMpCharged,isFumble,isCrit,isNormalSuccess,cancelled:false};
     });
-    const crits=dice.filter(d=>d.isCrit), fumbles=dice.filter(d=>d.isFumble);
+    const activeDice=dice.filter(d=>!d.isMpCharged);
+    const chargedDice=dice.filter(d=>d.isMpCharged);
+    const crits=activeDice.filter(d=>d.isCrit), fumbles=activeDice.filter(d=>d.isFumble);
     const cancelCount=Math.min(crits.length,fumbles.length);
     for(let i=0;i<cancelCount;i++){crits[i].cancelled=true;fumbles[i].cancelled=true}
     const survivingCrits=crits.filter(d=>!d.cancelled).length;
     const survivingFumbles=fumbles.filter(d=>!d.cancelled).length;
-    const normalSuccesses=dice.filter(d=>d.isNormalSuccess).length;
+    const normalSuccesses=activeDice.filter(d=>d.isNormalSuccess).length;
     const critValue=state.superSuccess?3:2;
     const rawDegree=normalSuccesses+survivingCrits*critValue;
 
@@ -153,7 +171,7 @@
     // 大成功と大失敗を相殺した後、大失敗が1個でも残ればファンブル。
     // 成功度は0（失敗）として扱う。
     const isFumble=survivingFumbles>0;
-    const degree=isFumble?0:rawDegree;
+    const degree=isFumble?0:Math.floor(rawDegree*limitGum.numerator/limitGum.denominator);
 
     return {
       ...data,dice,
@@ -165,6 +183,13 @@
       normalSuccesses,
       critValue,
       superSuccess:state.superSuccess,
+      limitGum:state.limitGum,
+      limitGumLabel:limitGum.label,
+      limitGumFraction:limitGum.fraction,
+      activeDice,
+      chargedDice,
+      activeRolls:activeDice.map(d=>d.value),
+      mpChargeCount:chargedDice.length,
       rawDegree,
       isFumble,
       degree
@@ -172,6 +197,7 @@
   }
 
   function dieClass(d){
+    if(d.isMpCharged)return"mp-charged";
     if(d.cancelled)return"cancelled";
     if(d.isFumble)return"fumble";
     if(d.isCrit)return"crit";
@@ -179,18 +205,31 @@
     return"";
   }
 
+  function dieResultLabel(d){
+    if(d.isFumble)return"大失敗";
+    if(d.isCrit)return"大成功";
+    if(d.isNormalSuccess)return"通常成功";
+    return"失敗";
+  }
+
   function render(){
     if(!state)return;
     const r=evaluateCurrent();
+    const beforeMpCharge=state.mpCharged.size?evaluateCurrent(new Set()):r;
     els.actualDegree.textContent=r.degree;
-    els.editTarget.value=state.target;els.editCrit.value=state.crit;els.editFumble.value=state.fumble;
+    els.editTarget.value=r.target;els.editCrit.value=r.crit;els.editFumble.value=r.fumble;
     els.superSuccess.checked=state.superSuccess;
+    limitGumRadios.forEach(radio=>radio.checked=radio.dataset.limitGum===state.limitGum);
 
     const metrics=[
-      `ダイス ${state.currentRolls.length}個`,`目標値 ${state.target}`,`大成功 ≤${state.crit}`,
-      `大失敗 ≥${state.fumble}`,`通常成功 ${r.normalSuccesses}`,`大成功 ${r.critCount}`,
+      ...(r.mpChargeCount
+        ?[`振ったダイス ${state.currentRolls.length}個`,`判定使用 ${r.activeDice.length}個`,`MPチャージ ${r.mpChargeCount}点`]
+        :[`ダイス ${state.currentRolls.length}個`]),
+      `目標値 ${r.target}`,`大成功 ≤${r.crit}`,
+      `大失敗 ≥${r.fumble}`,`通常成功 ${r.normalSuccesses}`,`大成功 ${r.critCount}`,
       `大失敗 ${r.fumbleCount}`,`相殺 ${r.cancelCount}組`,
       ...(state.superSuccess?[`超成功 ON（大成功×3）`]:[]),
+      ...(state.limitGum!=="none"?[`${r.limitGumLabel} ON（成功度×${r.limitGumFraction}・切り捨て）`]:[]),
       ...(r.survivingFumbles>0?[`残存大失敗 ${r.survivingFumbles}`]:[])
     ];
     els.metrics.innerHTML=metrics.map(x=>`<span class="metric">${x}</span>`).join("");
@@ -200,10 +239,11 @@
       const btn=document.createElement("button");
       btn.type="button";
       const changed=state.currentRolls[d.index]!==state.originalRolls[d.index];
+      const detail=[d.isMpCharged?"MP+1":"",changed?`元:${state.originalRolls[d.index]}`:""].filter(Boolean).join(" / ");
       btn.className=`edit-die ${dieClass(d)} ${state.selected.has(d.index)?"selected":""} ${changed?"changed":""}`;
       btn.setAttribute("aria-pressed",state.selected.has(d.index)?"true":"false");
-      btn.setAttribute("aria-label",`${d.index+1}個目のダイス、出目${d.value}${changed?`、元の出目${state.originalRolls[d.index]}`:""}`);
-      btn.innerHTML=`<span class="value">${d.value}</span><span class="original">${changed?`元:${state.originalRolls[d.index]}`:""}</span>`;
+      btn.setAttribute("aria-label",`${d.index+1}個目のダイス、出目${d.value}${d.isMpCharged?"、MPチャージで判定から除外中":""}${changed?`、元の出目${state.originalRolls[d.index]}`:""}`);
+      btn.innerHTML=`<span class="value">${d.value}</span><span class="original">${detail}</span>`;
       btn.title="クリックで選択";
       btn.addEventListener("click",()=>{
         if(state.selected.has(d.index))state.selected.delete(d.index);else state.selected.add(d.index);
@@ -212,23 +252,54 @@
       els.diceEditor.appendChild(btn);
     });
 
+    els.clearMpCharge.disabled=r.mpChargeCount===0;
+    els.mpChargeSummary.textContent=r.mpChargeCount
+      ?`MPチャージ ${r.mpChargeCount}点 ／ 除外 ${r.mpChargeCount}個 ／ 成功度 ${beforeMpCharge.degree} → ${r.degree}`
+      :"MPチャージする出目を選択してください。";
+    els.mpChargeDice.innerHTML="";
+    beforeMpCharge.dice.forEach(d=>{
+      const charged=state.mpCharged.has(d.index);
+      const btn=document.createElement("button");
+      btn.type="button";
+      btn.className=`mp-charge-die ${charged?"is-charged":""}`;
+      btn.setAttribute("aria-pressed",charged?"true":"false");
+      btn.setAttribute("aria-label",`${d.index+1}個目のダイス、出目${d.value}、${dieResultLabel(d)}。${charged?"MPチャージで判定から除外中。押すと解除":"押すとMPチャージに使用"}`);
+      btn.innerHTML=`<span class="value">${d.value}</span><span class="state">${charged?"MP +1":"選択"}</span>`;
+      btn.title=charged?"クリックでMPチャージを解除":"クリックでMPチャージに使用";
+      btn.addEventListener("click",()=>{
+        if(state.mpCharged.has(d.index))state.mpCharged.delete(d.index);else state.mpCharged.add(d.index);
+        state.selected.delete(d.index);
+        render();
+      });
+      els.mpChargeDice.appendChild(btn);
+    });
+
     if(r.isFumble){
-      els.calculation.textContent=`大成功と大失敗を相殺後、大失敗が${r.survivingFumbles}個残存 → 成功度0`;
+      const chargePrefix=r.mpChargeCount?`MPチャージ除外後[${r.activeRolls.join(",")}]：`:"";
+      els.calculation.textContent=`${chargePrefix}大成功と大失敗を相殺後、大失敗が${r.survivingFumbles}個残存 → 成功度0`;
       els.judge.textContent="ファンブル";
       els.judge.style.color="var(--red)";
     }else{
-      els.calculation.textContent=`${r.normalSuccesses}+${r.survivingCrits}×${r.critValue} = ${r.degree}${state.superSuccess?"（超成功）":""}`;
+      const chargePrefix=r.mpChargeCount?`MPチャージ除外後[${r.activeRolls.join(",")}]：`:"";
+      const baseCalculation=`${chargePrefix}${r.normalSuccesses}+${r.survivingCrits}×${r.critValue} = ${r.rawDegree}${state.superSuccess?"（超成功）":""}`;
+      els.calculation.textContent=state.limitGum==="none"
+        ?baseCalculation
+        :`${baseCalculation} → ${r.limitGumLabel}：${r.rawDegree}×${r.limitGumFraction} = ${r.degree}（切り捨て）`;
       els.judge.textContent=r.degree>=1?"成功":"失敗";
       els.judge.style.color=r.degree>=1?"var(--teal)":"var(--red)";
     }
 
     const changedCount=state.currentRolls.filter((v,i)=>v!==state.originalRolls[i]).length;
-    const thresholdChanged=state.target!==state.original.target||state.crit!==state.original.crit||state.fumble!==state.original.fumble||state.superSuccess!==state.original.superSuccess;
+    const thresholdChanged=r.target!==state.original.target||r.crit!==state.original.crit||r.fumble!==state.original.fumble||state.superSuccess!==state.original.superSuccess;
+    const limitGumChanged=state.limitGum!=="none";
+    const mpChargeChanged=r.mpChargeCount>0;
 
-    if(changedCount||thresholdChanged){
+    if(changedCount||thresholdChanged||limitGumChanged||mpChargeChanged){
+      const limitGumNotice=limitGumChanged?`／${r.limitGumLabel}適用`:"";
+      const mpChargeNotice=mpChargeChanged?`／MPチャージ${r.mpChargeCount}点`:"";
       els.differenceBox.textContent=r.isFumble
-        ?`変更反映済み：出目変更 ${changedCount}個${thresholdChanged?"／判定値変更あり":""}。相殺後も大失敗が残っているためファンブル、成功度0です。`
-        :`変更反映済み：出目変更 ${changedCount}個${thresholdChanged?"／判定値変更あり":""}。現在の成功度は ${r.degree} です。`;
+        ?`変更反映済み：出目変更 ${changedCount}個${thresholdChanged?"／判定値変更あり":""}${limitGumNotice}${mpChargeNotice}。相殺後も大失敗が残っているためファンブル、成功度0です。`
+        :`変更反映済み：出目変更 ${changedCount}個${thresholdChanged?"／判定値変更あり":""}${limitGumNotice}${mpChargeNotice}。現在の成功度は ${r.degree} です。`;
     }else if(state.shownSuccess==null){
       els.differenceBox.textContent="ココフォリア側の「成功数」は取得できませんでしたが、再計算は完了しています。";
     }else{
@@ -244,23 +315,29 @@
 
     const changes=[];
     state.currentRolls.forEach((v,i)=>{if(v!==state.originalRolls[i])changes.push(`${state.originalRolls[i]}→${v}`)});
-    if(state.target!==state.original.target)changes.push(`目標値 ${state.original.target}→${state.target}`);
-    if(state.crit!==state.original.crit)changes.push(`大成功値 ${state.original.crit}→${state.crit}`);
-    if(state.fumble!==state.original.fumble)changes.push(`大失敗値 ${state.original.fumble}→${state.fumble}`);
+    if(r.target!==state.original.target)changes.push(`目標値 ${state.original.target}→${r.target}`);
+    if(r.crit!==state.original.crit)changes.push(`大成功値 ${state.original.crit}→${r.crit}`);
+    if(r.fumble!==state.original.fumble)changes.push(`大失敗値 ${state.original.fumble}→${r.fumble}`);
     if(state.superSuccess!==state.original.superSuccess)changes.push(state.superSuccess?"超成功ON":"超成功OFF");
     const changeText=changes.length?` / 変更: ${changes.join(", ")}`:"";
+    const limitGumText=state.limitGum==="none"?"":` / 効果:${r.limitGumLabel}（成功度×${r.limitGumFraction}・切り捨て、適用前${r.rawDegree}）`;
+    const mpChargeDiceText=r.chargedDice.map(d=>`${d.index+1}個目:${d.value}`).join(",");
+    const rollText=r.mpChargeCount
+      ?`判定出目[${r.activeRolls.join(",")}] / MPチャージ${r.mpChargeCount}点（除外[${mpChargeDiceText}]） / 全出目[${state.currentRolls.join(",")}]`
+      :`出目[${state.currentRolls.join(",")}]`;
     const statusText=r.isFumble?"ファンブル":(r.degree>=1?"成功":"失敗");
-    els.finalResultText.textContent=`【WoW確定結果】${statusText} / 成功度${r.degree} / 出目[${state.currentRolls.join(",")}] / 目標値${state.target} / 大成功≤${state.crit}${state.superSuccess?"（超成功:1個=3）":""} / 大失敗≥${state.fumble}${changeText}`;
+    els.finalResultText.textContent=`【WoW確定結果】${statusText} / 成功度${r.degree} / ${rollText} / 目標値${r.target} / 大成功≤${r.crit}${state.superSuccess?"（超成功:1個=3）":""} / 大失敗≥${r.fumble}${limitGumText}${changeText}`;
   }
 
   function startAnalysis(parsed){
     state={
       originalRolls:[...parsed.rolls],
       currentRolls:[...parsed.rolls],
-      target:parsed.target,crit:parsed.crit,fumble:parsed.fumble,superSuccess:false,
+      target:parsed.target,crit:parsed.crit,fumble:parsed.fumble,superSuccess:false,limitGum:"none",
       original:{target:parsed.target,crit:parsed.crit,fumble:parsed.fumble,superSuccess:false},
       shownSuccess:parsed.shownSuccess,
-      selected:new Set()
+      selected:new Set(),
+      mpCharged:new Set()
     };
     els.analyzeEmpty.classList.add("hidden");
     els.analyzeResult.classList.remove("hidden");
@@ -274,9 +351,10 @@
 
   function syncThresholds(){
     if(!state)return;
+    const limitGum=getLimitGum(state.limitGum);
     state.target=intVal(els.editTarget,state.target);
-    state.crit=intVal(els.editCrit,state.crit);
-    state.fumble=intVal(els.editFumble,state.fumble);
+    state.crit=intVal(els.editCrit,state.crit+limitGum.critDelta)-limitGum.critDelta;
+    state.fumble=intVal(els.editFumble,state.fumble+limitGum.fumbleDelta)-limitGum.fumbleDelta;
     render();
   }
 
@@ -294,8 +372,6 @@
   }));
 
   els.copyCommand.addEventListener("click",()=>copyText(els.commandOutput.textContent,els.copyCommand));
-  els.plusDie.addEventListener("click",()=>{els.bonusDice.value=clamp(intVal(els.bonusDice,0)+1,-99,99);buildCommand()});
-  els.plusTarget.addEventListener("click",()=>{els.target.value=clamp(intVal(els.target,6)+1,1,12);buildCommand()});
   els.resetBuilder.addEventListener("click",()=>{
     els.ability.value=4;els.bonusDice.value=0;els.target.value=6;els.favored.checked=false;els.crit.value=1;els.fumble.value=12;els.memo.value="";
     [els.equipDice,els.equipTarget,els.giftDice,els.giftTarget,els.itemDice,els.itemTarget,els.otherDice,els.otherTarget].forEach(el=>el.value=0);
@@ -315,6 +391,11 @@
     state.superSuccess=els.superSuccess.checked;
     render();
   });
+  limitGumRadios.forEach(radio=>radio.addEventListener("change",()=>{
+    if(!state||!radio.checked)return;
+    state.limitGum=LIMIT_GUMS[radio.dataset.limitGum]?radio.dataset.limitGum:"none";
+    render();
+  }));
   els.selectedValueInput.addEventListener("input",()=>{
     const v=parseInt(els.selectedValueInput.value,10);
     if(Number.isFinite(v)){
@@ -355,11 +436,17 @@
     render();
   });
 
+  els.clearMpCharge.addEventListener("click",()=>{
+    if(!state||!state.mpCharged.size)return;
+    state.mpCharged.clear();
+    render();
+  });
+
   els.resetEdits.addEventListener("click",()=>{
     if(!state)return;
     state.currentRolls=[...state.originalRolls];
-    state.target=state.original.target;state.crit=state.original.crit;state.fumble=state.original.fumble;state.superSuccess=state.original.superSuccess;
-    state.selected.clear();render();
+    state.target=state.original.target;state.crit=state.original.crit;state.fumble=state.original.fumble;state.superSuccess=state.original.superSuccess;state.limitGum="none";
+    state.selected.clear();state.mpCharged.clear();render();
   });
 
   els.copyFinalResult.addEventListener("click",()=>copyText(els.finalResultText.textContent,els.copyFinalResult));

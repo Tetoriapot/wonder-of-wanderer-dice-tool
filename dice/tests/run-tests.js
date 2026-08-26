@@ -7,6 +7,8 @@ const vm = require("node:vm");
 
 const scriptPath = path.resolve(__dirname, "..", "script.js");
 const scriptSource = fs.readFileSync(scriptPath, "utf8");
+const htmlPath = path.resolve(__dirname, "..", "index.html");
+const htmlSource = fs.readFileSync(htmlPath, "utf8");
 
 class FakeClassList {
   constructor() {
@@ -128,6 +130,7 @@ class FakeDocument {
     this.elements = new Map();
     this.thresholdButtons = [];
     this.themeButtons = [];
+    this.limitGumRadios = [];
     this.documentElement = new FakeElement("html");
     this.documentElement.dataset.theme = "default";
     this.body = new FakeElement("body");
@@ -153,6 +156,14 @@ class FakeDocument {
         this.thresholdButtons.push(button);
       }
     }
+
+    for (const value of ["none", "60", "50"]) {
+      const radio = new FakeElement("input");
+      radio.value = value;
+      radio.dataset.limitGum = value;
+      radio.checked = value === "none";
+      this.limitGumRadios.push(radio);
+    }
   }
 
   getElementById(id) {
@@ -169,6 +180,7 @@ class FakeDocument {
   querySelectorAll(selector) {
     if (selector === "[data-threshold]") return this.thresholdButtons;
     if (selector === "[data-theme-option]") return this.themeButtons;
+    if (selector === "[data-limit-gum]") return this.limitGumRadios;
     return [];
   }
 
@@ -246,6 +258,9 @@ function createApp(options = {}) {
     themeButton: theme => document.themeButtons.find(
       button => button.dataset.themeOption === theme
     ),
+    limitGumOption: value => document.limitGumRadios.find(
+      radio => radio.dataset.limitGum === value
+    ),
     thresholdButton: (key, delta) => document.thresholdButtons.find(
       button => button.dataset.threshold === key && Number(button.dataset.delta) === delta
     )
@@ -269,6 +284,19 @@ function selectDie(app, index) {
   const button = app.el("diceEditor").children[index];
   assert.ok(button, `出目 ${index + 1} のボタンが存在すること`);
   button.click();
+}
+
+function toggleMpCharge(app, index) {
+  const button = app.el("mpChargeDice").children[index];
+  assert.ok(button, `MPチャージ用の出目 ${index + 1} のボタンが存在すること`);
+  button.click();
+}
+
+function chooseLimitGum(app, value) {
+  const radio = app.limitGumOption(value);
+  assert.ok(radio, `${value} のリミットガム選択肢が存在すること`);
+  radio.checked = true;
+  fire(radio, "change");
 }
 
 function assertRejectedLog(log) {
@@ -343,6 +371,222 @@ test("超成功中でも大失敗が残れば成功度0とする", () => {
 
   assert.equal(degree(app), 0);
   assert.equal(app.el("judge").textContent, "ファンブル");
+});
+
+test("60%と50%リミットガムを排他的に切り替え、補正を重複させない", () => {
+  const app = createApp();
+  analyze(app, "(5WW12@2#11<=6) > [1,2,3,4,11] > 成功数4");
+
+  assert.equal(degree(app), 4);
+  chooseLimitGum(app, "60");
+  assert.equal(degree(app), 3);
+  assert.equal(Number(app.el("editCrit").value), 1);
+  assert.equal(Number(app.el("editFumble").value), 12);
+  assert.equal(app.limitGumOption("60").checked, true);
+  assert.equal(app.limitGumOption("50").checked, false);
+  assert.match(app.el("calculation").textContent, /5×2\/3 = 3（切り捨て）/);
+
+  chooseLimitGum(app, "50");
+  assert.equal(degree(app), 2);
+  assert.equal(Number(app.el("editCrit").value), 1);
+  assert.equal(Number(app.el("editFumble").value), 12);
+  assert.equal(app.limitGumOption("60").checked, false);
+  assert.equal(app.limitGumOption("50").checked, true);
+  assert.match(app.el("finalResultText").textContent, /50%リミットガム/);
+  assert.doesNotMatch(app.el("finalResultText").textContent, /60%リミットガム/);
+
+  chooseLimitGum(app, "none");
+  assert.equal(degree(app), 4);
+  assert.equal(Number(app.el("editCrit").value), 2);
+  assert.equal(Number(app.el("editFumble").value), 11);
+});
+
+test("リミットガムは標準判定値を大成功0・大失敗13まで補正する", () => {
+  const app = createApp();
+  analyze(app, "(3WW12@1#12<=6) > [1,2,12] > 成功数1");
+  chooseLimitGum(app, "60");
+
+  assert.equal(degree(app), 1);
+  assert.equal(Number(app.el("editCrit").value), 0);
+  assert.equal(Number(app.el("editFumble").value), 13);
+  assert.match(app.el("finalResultText").textContent, /大成功≤0/);
+  assert.match(app.el("finalResultText").textContent, /大失敗≥13/);
+});
+
+test("リミットガムの切り捨てで調整前成功度1を失敗にする", () => {
+  const app = createApp();
+  analyze(app, "(1WW12@2#11<=6) > [3] > 成功数1");
+
+  chooseLimitGum(app, "60");
+  assert.equal(degree(app), 0);
+  assert.equal(app.el("judge").textContent, "失敗");
+
+  chooseLimitGum(app, "50");
+  assert.equal(degree(app), 0);
+  assert.equal(app.el("judge").textContent, "失敗");
+});
+
+test("超成功を加算した後にリミットガムの割合を適用する", () => {
+  const app = createApp();
+  analyze(app, "(4WW12@2#11<=6) > [1,2,3,4] > 成功数4");
+  app.el("superSuccess").checked = true;
+  fire(app.el("superSuccess"), "change");
+
+  chooseLimitGum(app, "60");
+  assert.equal(degree(app), 4);
+  assert.match(app.el("calculation").textContent, /6.*6×2\/3 = 4/);
+
+  chooseLimitGum(app, "50");
+  assert.equal(degree(app), 3);
+});
+
+test("リミットガム適用後も残存大失敗をファンブルとして優先する", () => {
+  const app = createApp();
+  analyze(app, "(4WW12@2#11<=6) > [1,2,12,12] > 成功数2");
+  chooseLimitGum(app, "50");
+
+  assert.equal(degree(app), 0);
+  assert.equal(app.el("judge").textContent, "ファンブル");
+  assert.match(app.el("differenceBox").textContent, /50%リミットガム適用/);
+});
+
+test("変更リセットでリミットガムと補正後判定値を初期状態へ戻す", () => {
+  const app = createApp();
+  analyze(app, "(5WW12@2#11<=6) > [1,2,3,4,11] > 成功数4");
+  chooseLimitGum(app, "60");
+
+  app.el("resetEdits").click();
+
+  assert.equal(degree(app), 4);
+  assert.equal(app.limitGumOption("none").checked, true);
+  assert.equal(app.limitGumOption("60").checked, false);
+  assert.equal(Number(app.el("editCrit").value), 2);
+  assert.equal(Number(app.el("editFumble").value), 11);
+  assert.doesNotMatch(app.el("finalResultText").textContent, /リミットガム/);
+});
+
+test("画面にリミットガム2種と排他的なラジオ選択肢を備える", () => {
+  assert.match(htmlSource, /id="limitGum60"[^>]*name="limitGum"[^>]*data-limit-gum="60"/);
+  assert.match(htmlSource, /id="limitGum50"[^>]*name="limitGum"[^>]*data-limit-gum="50"/);
+  assert.match(htmlSource, /60%リミットガム/);
+  assert.match(htmlSource, /50%リミットガム/);
+});
+
+test("指定例の5と2をMPチャージに使用し、残る6と4で成功度2にする", () => {
+  const app = createApp();
+  analyze(
+    app,
+    "(4)WW12 (4WW12@1#12<=6) ＞ [6,5,4,2] ＞ 成功数4（大成功0個、大失敗0個）"
+  );
+
+  assert.equal(degree(app), 4);
+  toggleMpCharge(app, 1);
+  toggleMpCharge(app, 3);
+
+  assert.equal(degree(app), 2);
+  assert.equal(app.el("judge").textContent, "成功");
+  assert.match(app.el("mpChargeSummary").textContent, /MPチャージ 2点.*成功度 4 → 2/);
+  assert.match(app.el("metrics").innerHTML, /判定使用 2個/);
+  assert.match(app.el("calculation").textContent, /MPチャージ除外後\[6,4\]：2\+0×2 = 2/);
+  assert.match(
+    app.el("finalResultText").textContent,
+    /判定出目\[6,4\].*MPチャージ2点（除外\[2個目:5,4個目:2\]）.*全出目\[6,5,4,2\]/
+  );
+  assert.equal(app.el("mpChargeDice").children[1].getAttribute("aria-pressed"), "true");
+  assert.equal(app.el("mpChargeDice").children[3].getAttribute("aria-pressed"), "true");
+});
+
+test("MPチャージを個別または一括で解除し、判定へ戻せる", () => {
+  const app = createApp();
+  analyze(app, "(4WW12@1#12<=6) > [6,5,4,2] > 成功数4");
+  toggleMpCharge(app, 1);
+  toggleMpCharge(app, 3);
+
+  toggleMpCharge(app, 1);
+  assert.equal(degree(app), 3);
+  assert.match(
+    app.el("finalResultText").textContent,
+    /判定出目\[6,5,4\].*MPチャージ1点（除外\[4個目:2\]）/
+  );
+
+  app.el("clearMpCharge").click();
+  assert.equal(degree(app), 4);
+  assert.equal(app.el("clearMpCharge").disabled, true);
+  assert.equal(app.el("mpChargeSummary").textContent, "MPチャージする出目を選択してください。");
+  assert.match(app.el("finalResultText").textContent, /出目\[6,5,4,2\]/);
+  assert.doesNotMatch(app.el("finalResultText").textContent, /MPチャージ\d+点/);
+  for (const button of app.el("mpChargeDice").children) {
+    assert.equal(button.getAttribute("aria-pressed"), "false");
+  }
+});
+
+test("同じ値のダイスが複数あっても選択したindexだけをMPチャージから除外する", () => {
+  const app = createApp();
+  analyze(app, "(3WW12<=6) > [5,5,7] > 成功数2");
+
+  toggleMpCharge(app, 1);
+
+  assert.equal(degree(app), 1);
+  assert.match(
+    app.el("finalResultText").textContent,
+    /判定出目\[5,7\].*MPチャージ1点（除外\[2個目:5\]）.*全出目\[5,5,7\]/
+  );
+  assert.equal(app.el("mpChargeDice").children[0].getAttribute("aria-pressed"), "false");
+  assert.equal(app.el("mpChargeDice").children[1].getAttribute("aria-pressed"), "true");
+});
+
+test("MPチャージ除外後のダイスで大成功と大失敗の相殺から再計算する", () => {
+  const app = createApp();
+  analyze(app, "(3WW12@1#12<=6) > [1,2,12] > 成功数2");
+
+  assert.equal(degree(app), 1);
+  assert.match(app.el("metrics").innerHTML, /相殺 1組/);
+
+  toggleMpCharge(app, 0);
+
+  assert.equal(degree(app), 0);
+  assert.equal(app.el("judge").textContent, "ファンブル");
+  assert.match(app.el("metrics").innerHTML, /相殺 0組/);
+  assert.match(app.el("metrics").innerHTML, /残存大失敗 1/);
+  assert.match(app.el("calculation").textContent, /MPチャージ除外後\[2,12\].*成功度0/);
+});
+
+test("全ダイスをMPチャージに使用した場合は空の判定出目で通常失敗にする", () => {
+  const app = createApp();
+  analyze(app, "(1WW12@1#12<=6) > [1] > 成功数1");
+
+  assert.equal(degree(app), 2);
+  toggleMpCharge(app, 0);
+
+  assert.equal(degree(app), 0);
+  assert.equal(app.el("judge").textContent, "失敗");
+  assert.match(app.el("calculation").textContent, /MPチャージ除外後\[\]：0\+0×2 = 0/);
+  assert.match(app.el("finalResultText").textContent, /判定出目\[\].*MPチャージ1点/);
+});
+
+test("変更をすべて戻すとMPチャージ対象も全解除する", () => {
+  const app = createApp();
+  analyze(app, "(4WW12@1#12<=6) > [6,5,4,2] > 成功数4");
+  toggleMpCharge(app, 1);
+  toggleMpCharge(app, 3);
+
+  app.el("resetEdits").click();
+
+  assert.equal(degree(app), 4);
+  assert.equal(app.el("clearMpCharge").disabled, true);
+  assert.equal(app.el("mpChargeSummary").textContent, "MPチャージする出目を選択してください。");
+  assert.match(app.el("finalResultText").textContent, /出目\[6,5,4,2\]/);
+  assert.doesNotMatch(app.el("finalResultText").textContent, /MPチャージ\d+点/);
+  for (const button of app.el("mpChargeDice").children) {
+    assert.equal(button.getAttribute("aria-pressed"), "false");
+  }
+});
+
+test("画面に結果後MPチャージの説明・出目選択・一括解除UIを備える", () => {
+  assert.match(htmlSource, /id="mpChargeTitle">結果後MPチャージ</);
+  assert.match(htmlSource, /1個につき1MPとして、そのダイスを判定から除外します/);
+  assert.match(htmlSource, /id="clearMpCharge"[^>]*disabled[^>]*>すべて解除<\/button>/);
+  assert.match(htmlSource, /id="mpChargeDice"[^>]*role="group"[^>]*aria-label="MPチャージする出目"/);
 });
 
 test("大成功値と大失敗値が重なる出目は大失敗を優先する", () => {
@@ -520,9 +764,6 @@ test("チャパレ基本入力の範囲外値を表示と式で一致させる",
   assert.equal(app.el("crit").value, 12);
   assert.equal(app.el("fumble").value, 1);
   assert.equal(app.el("commandOutput").textContent, "(99+99)WW12@12#1<=(1)");
-
-  app.el("plusDie").click();
-  assert.equal(app.el("bonusDice").value, 99);
 });
 
 test("クリップボードAPIが使えない場合はローカルコピー手段へフォールバックする", () => {

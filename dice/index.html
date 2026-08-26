@@ -4,16 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta id="themeColor" name="theme-color" content="#73d0eb" />
-  <meta name="description" content="TRPG『WONDER of WANDERER』のココフォリア用チャパレ式作成と判定ログ再計算を行う非公式ファンメイドツールです。" />
+  <meta name="description" content="TRPG『ワンダーオブワンダラー』のココフォリア用チャパレ式作成と判定ログ再計算を行う非公式ファンメイドツールです。" />
   <meta name="robots" content="index, follow" />
-  <title>WONDER of WANDERER 判定補助</title>
+  <title>ワンダーオブワンダラー 判定補助</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <main class="app-shell">
     <header class="hero">
       <div>
-        <p class="eyebrow">WONDER of WANDERER</p>
+        <p class="eyebrow">ワンダーオブワンダラー</p>
         <h1>判定補助ツール</h1>
         <p class="lead">ココフォリア用チャパレ式の作成と、貼り付けた判定ログの成功度再計算。</p>
       </div>
@@ -153,8 +153,6 @@
         </div>
 
         <div class="button-row">
-          <button id="plusDie" class="soft-button" type="button">追加ダイス +1</button>
-          <button id="plusTarget" class="soft-button" type="button">目標値 +1</button>
           <button id="resetBuilder" class="soft-button" type="button">リセット</button>
         </div>
       </section>
@@ -203,6 +201,36 @@
               </span>
             </label>
 
+            <fieldset class="limit-gum-selector" aria-describedby="limitGumHelp">
+              <legend>リミットガム（併用不可）</legend>
+              <p id="limitGumHelp" class="helper-text">
+                判定前に使用したものを選択します。解析した判定値と最終成功度へ効果をまとめて反映します。
+              </p>
+
+              <label class="limit-gum-none">
+                <input id="limitGumNone" type="radio" name="limitGum" value="none" data-limit-gum="none" checked>
+                <span><strong>使用しない</strong></span>
+              </label>
+
+              <div class="limit-gum-grid">
+                <label class="limit-gum-option">
+                  <input id="limitGum60" type="radio" name="limitGum" value="60" data-limit-gum="60" aria-describedby="limitGum60Effect">
+                  <span class="limit-gum-copy">
+                    <strong>60%リミットガム</strong>
+                    <small id="limitGum60Effect">大成功値 −1／大失敗値 +1／最終成功度 ×2/3（切り捨て）</small>
+                  </span>
+                </label>
+
+                <label class="limit-gum-option">
+                  <input id="limitGum50" type="radio" name="limitGum" value="50" data-limit-gum="50" aria-describedby="limitGum50Effect">
+                  <span class="limit-gum-copy">
+                    <strong>50%リミットガム</strong>
+                    <small id="limitGum50Effect">大成功値 −1／大失敗値 +1／最終成功度 ×1/2（切り捨て）</small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
             <div class="threshold-editor">
               <label>
                 <span>目標値</span>
@@ -247,6 +275,22 @@
               </div>
             </div>
             <div id="diceEditor" class="dice-editor"></div>
+
+            <section class="mp-charge-panel" aria-labelledby="mpChargeTitle" aria-describedby="mpChargeHelp">
+              <div class="mp-charge-head">
+                <div>
+                  <h4 id="mpChargeTitle">結果後MPチャージ</h4>
+                  <p id="mpChargeHelp">
+                    ギフトの条件を満たす出目を押してください。1個につき1MPとして、そのダイスを判定から除外します。条件とギフトごとのソウルLV上限は手元で確認してください。
+                  </p>
+                </div>
+                <button id="clearMpCharge" class="ghost-button" type="button" disabled>すべて解除</button>
+              </div>
+              <div id="mpChargeSummary" class="mp-charge-summary" aria-live="polite" aria-atomic="true">
+                MPチャージする出目を選択してください。
+              </div>
+              <div id="mpChargeDice" class="mp-charge-dice" role="group" aria-label="MPチャージする出目"></div>
+            </section>
           </div>
 
           <div class="recalc-box compact-recalc" aria-live="polite">
@@ -269,7 +313,7 @@
     </section>
 
     <footer class="site-footer">
-      <p>本ツールは非公式のファンメイドツールであり、『<a href="https://ssproject.lsv.jp/wow/public/" target="_blank" rel="noopener noreferrer">WONDER of WANDERER</a>』の公式または権利者とは関係ありません。</p>
+      <p>本ツールは非公式のファンメイドツールであり、『<a href="https://ssproject.lsv.jp/wow/public/" target="_blank" rel="noopener noreferrer">ワンダーオブワンダラー</a>』の公式または権利者とは関係ありません。</p>
       <p>入力した判定ログはブラウザー内だけで処理され、外部へ送信されません。</p>
     </footer>
   </main>
