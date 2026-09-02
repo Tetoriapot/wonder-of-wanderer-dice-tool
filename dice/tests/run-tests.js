@@ -31,6 +31,7 @@ class FakeClassList {
 class FakeElement {
   constructor(tagName = "div") {
     this.tagName = tagName.toUpperCase();
+    this.open = false;
     this.value = "";
     this.checked = false;
     this.textContent = "";
@@ -97,6 +98,18 @@ class FakeElement {
 
   focus() {
     this.focused = true;
+  }
+
+  showModal() {
+    this.open = true;
+    this.setAttribute("open", "");
+  }
+
+  close() {
+    if (!this.open) return;
+    this.open = false;
+    this.removeAttribute("open");
+    this.dispatchEvent({ type: "close" });
   }
 }
 
@@ -587,6 +600,79 @@ test("画面に結果後MPチャージの説明・出目選択・一括解除UI�
   assert.match(htmlSource, /1個につき1MPとして、そのダイスを判定から除外します/);
   assert.match(htmlSource, /id="clearMpCharge"[^>]*disabled[^>]*>すべて解除<\/button>/);
   assert.match(htmlSource, /id="mpChargeDice"[^>]*role="group"[^>]*aria-label="MPチャージする出目"/);
+});
+
+test("ヘッダーに更新・Helpボタンと対応する案内ダイアログを備える", () => {
+  assert.match(
+    htmlSource,
+    /<button(?=[^>]*id="openUpdates")(?=[^>]*type="button")(?=[^>]*aria-haspopup="dialog")(?=[^>]*aria-controls="updatesDialog")[^>]*>更新<\/button>/
+  );
+  assert.match(
+    htmlSource,
+    /<button(?=[^>]*id="openHelp")(?=[^>]*type="button")(?=[^>]*aria-haspopup="dialog")(?=[^>]*aria-controls="helpDialog")[^>]*>Help<\/button>/
+  );
+
+  const updatesTag = htmlSource.match(
+    /<dialog(?=[^>]*id="updatesDialog")(?=[^>]*aria-labelledby="updatesDialogTitle")[^>]*>/
+  );
+  const helpTag = htmlSource.match(
+    /<dialog(?=[^>]*id="helpDialog")(?=[^>]*aria-labelledby="helpDialogTitle")[^>]*>/
+  );
+  assert.ok(updatesTag, "更新履歴のdialog要素が存在すること");
+  assert.ok(helpTag, "Helpのdialog要素が存在すること");
+  assert.doesNotMatch(updatesTag[0], /\sopen(?:\s|=|>)/);
+  assert.doesNotMatch(helpTag[0], /\sopen(?:\s|=|>)/);
+
+  assert.match(htmlSource, /id="updatesDialogTitle">更新履歴<\/h2>/);
+  assert.match(htmlSource, /id="closeUpdates"[^>]*type="button"[^>]*>閉じる<\/button>/);
+  assert.match(htmlSource, /<time\s+datetime="\d{4}-\d{2}-\d{2}">/);
+  assert.match(htmlSource, /id="helpDialogTitle">使い方<\/h2>/);
+  assert.match(htmlSource, /id="closeHelp"[^>]*type="button"[^>]*>閉じる<\/button>/);
+  assert.match(htmlSource, /チャパレ式を作る[\s\S]*判定ログを貼る[\s\S]*MPチャージと確定/);
+});
+
+test("更新・Helpダイアログを独立して開閉し、閉じた後に再オープンできる", () => {
+  const app = createApp();
+  const cases = [
+    {
+      trigger: "openUpdates",
+      dialog: "updatesDialog",
+      close: "closeUpdates",
+      otherDialog: "helpDialog"
+    },
+    {
+      trigger: "openHelp",
+      dialog: "helpDialog",
+      close: "closeHelp",
+      otherDialog: "updatesDialog"
+    }
+  ];
+
+  assert.equal(app.el("updatesDialog").open, false);
+  assert.equal(app.el("helpDialog").open, false);
+
+  for (const item of cases) {
+    app.el(item.trigger).click();
+
+    assert.equal(app.el(item.dialog).open, true);
+    assert.equal(app.el(item.dialog).getAttribute("open"), "");
+    assert.equal(app.el(item.trigger).getAttribute("aria-expanded"), "true");
+    assert.equal(app.el(item.close).focused, true);
+    assert.equal(app.el(item.otherDialog).open, false);
+
+    app.el(item.close).click();
+
+    assert.equal(app.el(item.dialog).open, false);
+    assert.equal(app.el(item.dialog).getAttribute("open"), null);
+    assert.equal(app.el(item.trigger).getAttribute("aria-expanded"), "false");
+    assert.equal(app.el(item.trigger).focused, true);
+    assert.equal(app.el(item.otherDialog).open, false);
+
+    app.el(item.trigger).click();
+    assert.equal(app.el(item.dialog).open, true);
+    app.el(item.close).click();
+    assert.equal(app.el(item.dialog).open, false);
+  }
 });
 
 test("大成功値と大失敗値が重なる出目は大失敗を優先する", () => {

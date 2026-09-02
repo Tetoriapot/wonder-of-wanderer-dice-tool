@@ -5,6 +5,8 @@
 
   const els = {
     themeColor:$("themeColor"),
+    openUpdates:$("openUpdates"), updatesDialog:$("updatesDialog"), closeUpdates:$("closeUpdates"),
+    openHelp:$("openHelp"), helpDialog:$("helpDialog"), closeHelp:$("closeHelp"),
     ability:$("ability"), bonusDice:$("bonusDice"), target:$("target"), favored:$("favored"),
     crit:$("crit"), fumble:$("fumble"), memo:$("memo"),
     equipDice:$("equipDice"), equipTarget:$("equipTarget"), equipMemo:$("equipMemo"),
@@ -53,6 +55,34 @@
   function loadTheme(){
     try{return localStorage.getItem(THEME_STORAGE_KEY)||"default"}catch{return"default"}
   }
+
+  function openInfoDialog(trigger,dialog,closeButton){
+    if(dialog.open)return;
+    trigger.setAttribute("aria-expanded","true");
+    if(typeof dialog.showModal==="function")dialog.showModal();
+    else{dialog.open=true;dialog.setAttribute("open","")}
+    closeButton.focus();
+  }
+
+  function closeInfoDialog(trigger,dialog){
+    if(!dialog.open&&dialog.getAttribute("open")===null)return;
+    if(typeof dialog.close==="function")dialog.close();
+    else{dialog.open=false;dialog.removeAttribute("open")}
+    trigger.setAttribute("aria-expanded","false");
+    trigger.focus();
+  }
+
+  [
+    [els.openUpdates,els.updatesDialog,els.closeUpdates],
+    [els.openHelp,els.helpDialog,els.closeHelp]
+  ].forEach(([trigger,dialog,closeButton])=>{
+    trigger.addEventListener("click",()=>openInfoDialog(trigger,dialog,closeButton));
+    closeButton.addEventListener("click",()=>closeInfoDialog(trigger,dialog));
+    dialog.addEventListener("close",()=>{
+      trigger.setAttribute("aria-expanded","false");
+      trigger.focus();
+    });
+  });
 
   let state = null;
 

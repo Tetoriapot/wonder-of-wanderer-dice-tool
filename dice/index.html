@@ -18,11 +18,17 @@
         <p class="lead">ココフォリア用チャパレ式の作成と、貼り付けた判定ログの成功度再計算。</p>
       </div>
       <div class="hero-actions">
-        <div class="theme-switcher" role="group" aria-label="表示モード">
-          <span class="theme-switcher-label" aria-hidden="true">表示</span>
-          <button type="button" data-theme-option="default" aria-pressed="true">通常</button>
-          <button type="button" data-theme-option="dark" aria-pressed="false">ダーク</button>
-          <button type="button" data-theme-option="simple" aria-pressed="false">シンプル</button>
+        <div class="hero-tools">
+          <nav class="header-menu" aria-label="案内">
+            <button id="openUpdates" class="header-menu-button" type="button" aria-haspopup="dialog" aria-controls="updatesDialog" aria-expanded="false">更新</button>
+            <button id="openHelp" class="header-menu-button" type="button" aria-haspopup="dialog" aria-controls="helpDialog" aria-expanded="false">Help</button>
+          </nav>
+          <div class="theme-switcher" role="group" aria-label="表示モード">
+            <span class="theme-switcher-label" aria-hidden="true">表示</span>
+            <button type="button" data-theme-option="default" aria-pressed="true">通常</button>
+            <button type="button" data-theme-option="dark" aria-pressed="false">ダーク</button>
+            <button type="button" data-theme-option="simple" aria-pressed="false">シンプル</button>
+          </div>
         </div>
         <div class="die-mark" aria-hidden="true">◆</div>
       </div>
@@ -317,6 +323,51 @@
       <p>入力した判定ログはブラウザー内だけで処理され、外部へ送信されません。</p>
     </footer>
   </main>
+
+  <dialog id="updatesDialog" class="info-dialog" aria-labelledby="updatesDialogTitle">
+    <article class="info-dialog-card">
+      <header class="info-dialog-head">
+        <div>
+          <p class="info-dialog-kicker">WHAT'S NEW</p>
+          <h2 id="updatesDialogTitle">更新履歴</h2>
+        </div>
+        <button id="closeUpdates" class="dialog-close" type="button">閉じる</button>
+      </header>
+      <ol class="update-list">
+        <li>
+          <time datetime="2026-09-02">2026.09.02</time>
+          <p><strong>ヘッダー案内を追加</strong><span>更新履歴とHelpを、いつでも確認できるようにしました。</span></p>
+        </li>
+        <li>
+          <time datetime="2026-08-26">2026.08.26</time>
+          <p><strong>判定後の調整機能を拡張</strong><span>結果後MPチャージ、60%／50%リミットガム、ダーク／シンプル表示に対応しました。</span></p>
+        </li>
+        <li>
+          <time datetime="2026-08-25">2026.08.25</time>
+          <p><strong>判定補助ツールを公開</strong><span>チャパレ式の作成と、判定ログの成功度再計算を公開しました。</span></p>
+        </li>
+      </ol>
+    </article>
+  </dialog>
+
+  <dialog id="helpDialog" class="info-dialog" aria-labelledby="helpDialogTitle">
+    <article class="info-dialog-card">
+      <header class="info-dialog-head">
+        <div>
+          <p class="info-dialog-kicker">QUICK GUIDE</p>
+          <h2 id="helpDialogTitle">使い方</h2>
+        </div>
+        <button id="closeHelp" class="dialog-close" type="button">閉じる</button>
+      </header>
+      <ol class="help-steps">
+        <li><span class="help-step-number" aria-hidden="true">1</span><p><strong>チャパレ式を作る</strong><span>能力値や補正を入力し、生成された式をココフォリアへコピーします。</span></p></li>
+        <li><span class="help-step-number" aria-hidden="true">2</span><p><strong>判定ログを貼る</strong><span>ココフォリアの結果を丸ごと貼り、「成功度を数える」を押します。</span></p></li>
+        <li><span class="help-step-number" aria-hidden="true">3</span><p><strong>結果を調整する</strong><span>必要に応じて出目・判定値・超成功・リミットガムを反映します。</span></p></li>
+        <li><span class="help-step-number" aria-hidden="true">4</span><p><strong>MPチャージと確定</strong><span>条件を満たす出目をMPチャージに使い、確定結果メモをコピーします。</span></p></li>
+      </ol>
+      <p class="info-dialog-note">入力内容と判定ログはブラウザー内だけで処理され、外部へ送信されません。</p>
+    </article>
+  </dialog>
 
   <script src="script.js"></script>
 </body>
